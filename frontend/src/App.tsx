@@ -62,7 +62,7 @@ export default function App() {
   }
 
   return (
-    <div className="relative flex h-full min-h-svh overflow-hidden bg-background">
+    <div className="relative flex h-full min-h-svh flex-col overflow-hidden bg-background md:flex-row">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-70"
@@ -72,7 +72,7 @@ export default function App() {
         }}
       />
 
-      <aside className="relative z-10 flex w-full max-w-md flex-col gap-3 overflow-y-auto border-r border-border/70 bg-background/40 p-4 backdrop-blur-md md:max-w-sm lg:max-w-md">
+      <aside className="relative z-10 flex max-h-[48vh] w-full flex-col gap-3 overflow-y-auto border-b border-border/70 bg-background/40 p-4 backdrop-blur-md md:max-h-none md:max-w-sm md:border-b-0 md:border-r lg:max-w-md">
         <header className="px-1 pb-1 pt-2">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
             Spotter

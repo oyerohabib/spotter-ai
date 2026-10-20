@@ -18,6 +18,11 @@ ALLOWED_HOSTS = [
     for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
+# Railway / reverse-proxy convenience
+if os.getenv("RAILWAY_PUBLIC_DOMAIN"):
+    ALLOWED_HOSTS.append(os.environ["RAILWAY_PUBLIC_DOMAIN"])
+if os.getenv("RAILWAY_STATIC_URL"):
+    ALLOWED_HOSTS.append(os.environ["RAILWAY_STATIC_URL"].replace("https://", "").replace("http://", ""))
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -45,10 +50,12 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
+FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [ROOT_DIR / "frontend" / "dist"],
+        "DIRS": [FRONTEND_DIST] if FRONTEND_DIST.exists() else [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -84,15 +91,16 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = []
-_frontend_assets = ROOT_DIR / "frontend" / "dist" / "assets"
-if _frontend_assets.exists():
-    STATICFILES_DIRS.append(ROOT_DIR / "frontend" / "dist")
 
 STORAGES = {
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
+
+# Serve the Vite build (index.html + /assets/*) from the app root in production.
+if FRONTEND_DIST.exists():
+    WHITENOISE_ROOT = str(FRONTEND_DIST)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -109,6 +117,12 @@ CORS_ALLOWED_ORIGINS = [
         "CORS_ALLOWED_ORIGINS",
         "http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
+    if origin.strip()
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 ]
 

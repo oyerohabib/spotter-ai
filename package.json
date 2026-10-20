@@ -1,0 +1,11 @@
+{
+  "name": "spotter-weather-routing",
+  "private": true,
+  "scripts": {
+    "dev:api": "cd backend && ../.venv/bin/python manage.py runserver",
+    "dev:web": "cd frontend && npm run dev",
+    "build:web": "cd frontend && npm run build",
+    "test:api": "cd backend && ../.venv/bin/python manage.py test routing",
+    "collectstatic": "cd backend && ../.venv/bin/python manage.py collectstatic --noinput"
+  }
+}
