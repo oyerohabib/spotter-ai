@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-background: #f3f1eb;
+  --color-foreground: #1a1f16;
+  --color-card: #fffcf5;
+  --color-card-foreground: #1a1f16;
+  --color-muted: #e7e2d6;
+  --color-muted-foreground: #5c6356;
+  --color-border: #d4cec0;
+  --color-primary: #1f4d3a;
+  --color-primary-foreground: #f7f4eb;
+  --color-accent: #c45c26;
+  --color-accent-foreground: #fffaf3;
+  --color-destructive: #9b2c2c;
+  --color-ring: #1f4d3a;
+
+  --color-risk-low: #2f6b4f;
+  --color-risk-moderate: #b8860b;
+  --color-risk-high: #c45c26;
+  --color-risk-severe: #9b2c2c;
+  --color-risk-no-travel: #2a211c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+}
