@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { ForecastSlider } from "@/components/ForecastSlider"
 import { RouteMap } from "@/components/RouteMap"
 import { RouteSummaryList } from "@/components/RouteSummaryList"
 import {
@@ -16,6 +17,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
+  const [forecastHour, setForecastHour] = useState(0)
 
   async function handleAnalyze() {
     setError(null)
@@ -45,6 +47,7 @@ export default function App() {
       })
       setResult(data)
       setSelectedRouteId(data.recommended_route_id ?? data.routes[0]?.id ?? null)
+      setForecastHour(0)
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -103,7 +106,7 @@ export default function App() {
           <RouteMap
             result={result}
             selectedRouteId={selectedRouteId}
-            forecastHour={0}
+            forecastHour={forecastHour}
             showHeatmap={Boolean(result)}
           />
           {!result ? (
@@ -113,7 +116,15 @@ export default function App() {
                 on the map.
               </p>
             </div>
-          ) : null}
+          ) : (
+            <div className="absolute inset-x-0 bottom-0 z-20 p-3 md:p-4">
+              <ForecastSlider
+                hour={forecastHour}
+                onChange={setForecastHour}
+                className="mx-auto max-w-xl"
+              />
+            </div>
+          )}
         </div>
       </main>
     </div>
