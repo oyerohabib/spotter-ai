@@ -3,7 +3,6 @@ from pathlib import Path
 from django.contrib import admin
 from django.http import HttpResponse
 from django.urls import include, path, re_path
-from django.views.generic import TemplateView
 
 FRONTEND_INDEX = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist" / "index.html"
 
