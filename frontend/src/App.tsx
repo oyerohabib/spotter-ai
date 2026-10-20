@@ -1,11 +1,12 @@
 import { useState } from "react"
 
+import { RouteMap } from "@/components/RouteMap"
+import { RouteSummaryList } from "@/components/RouteSummaryList"
 import {
   defaultTripFormValues,
   TripForm,
   type TripFormValues,
 } from "@/components/TripForm"
-import { RouteSummaryList } from "@/components/RouteSummaryList"
 import { analyzeRoutes, ApiError } from "@/lib/api"
 import type { AnalyzeResponse } from "@/types/routing"
 
@@ -98,20 +99,21 @@ export default function App() {
       </aside>
 
       <main className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-1 items-center justify-center p-6 text-center">
-          <div className="max-w-md space-y-2">
-            <p className="text-sm font-medium text-foreground">
-              {result
-                ? "Map view lands next — route data is ready."
-                : "Enter a trip and analyze to unlock map routes and weather risk."}
-            </p>
-            {result ? (
-              <p className="font-mono text-xs text-muted-foreground">
-                {result.routes.length} routes · recommended{" "}
-                {result.recommended_route_id ?? "n/a"}
+        <div className="relative min-h-[50vh] flex-1 overflow-hidden border-l border-border/40 md:min-h-0">
+          <RouteMap
+            result={result}
+            selectedRouteId={selectedRouteId}
+            forecastHour={0}
+            showHeatmap={Boolean(result)}
+          />
+          {!result ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/20 p-6 text-center backdrop-blur-[1px]">
+              <p className="max-w-md rounded-xl border border-border/70 bg-card/90 px-4 py-3 text-sm text-muted-foreground shadow-sm">
+                Enter a trip and analyze to plot routes, checkpoints, and weather risk
+                on the map.
               </p>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </main>
     </div>
