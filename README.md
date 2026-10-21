@@ -32,7 +32,7 @@ React + Django app that helps a truck driver choose the safest route using weath
 cp .env.example .env
 ```
 
-Fill in:
+Fill in the **repo-root** `.env` (Vite is configured to read from there):
 
 ```env
 MAPBOX_ACCESS_TOKEN=pk....
@@ -41,7 +41,7 @@ SECRET_KEY=any-dev-secret
 DEBUG=True
 ```
 
-Use the same public Mapbox token for both values in demos.
+Use the same public Mapbox token for both values in demos. Restart the Vite dev server after changing env vars.
 
 ### 2. Backend
 
