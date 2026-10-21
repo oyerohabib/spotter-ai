@@ -25,8 +25,8 @@ def _token() -> str:
     return token
 
 
-def geocode(query: str, *, limit: int = 1) -> dict[str, Any]:
-    """Geocode a free-text place into lon/lat and place name."""
+def _geocode_features(query: str, *, limit: int = 1) -> list[dict[str, Any]]:
+    """Return raw Mapbox geocoding features for a query."""
     q = query.strip()
     if not q:
         raise MapboxError("Origin/destination query cannot be empty.")
@@ -43,7 +43,36 @@ def geocode(query: str, *, limit: int = 1) -> dict[str, Any]:
         raise MapboxError(f"Geocoding failed ({resp.status_code}): {resp.text[:200]}")
 
     data = resp.json()
-    features = data.get("features") or []
+    return list(data.get("features") or [])
+
+
+def suggest_places(query: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    """
+    Return place suggestions for autocomplete.
+    Empty list when nothing matches (not an error).
+    """
+    features = _geocode_features(query, limit=limit)
+    results: list[dict[str, Any]] = []
+    for feature in features:
+        center = feature.get("center") or [None, None]
+        lon, lat = center[0], center[1]
+        if lon is None or lat is None:
+            continue
+        results.append(
+            {
+                "id": str(feature.get("id") or f"{lon},{lat}"),
+                "name": feature.get("place_name") or query.strip(),
+                "lon": float(lon),
+                "lat": float(lat),
+            }
+        )
+    return results
+
+
+def geocode(query: str, *, limit: int = 1) -> dict[str, Any]:
+    """Geocode a free-text place into lon/lat and place name."""
+    q = query.strip()
+    features = _geocode_features(q, limit=limit)
     if not features:
         raise MapboxError(f"No geocoding results for '{q}'.")
 

@@ -15,55 +15,164 @@ ALLOWED_INTERVALS = {10, 25, 50}
 
 
 class AnalyzeError(Exception):
-    def __init__(self, message: str, status: int = 400):
+    def __init__(
+        self,
+        message: str,
+        status: int = 400,
+        *,
+        field: str | None = None,
+    ):
         super().__init__(message)
         self.status = status
+        self.field = field
 
 
 def _parse_departure(value: str) -> datetime:
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise AnalyzeError("departure_at must be an ISO-8601 datetime.") from exc
+        raise AnalyzeError(
+            "Enter a valid departure date and time.",
+            field="departure_at",
+        ) from exc
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
 
 
+def _optional_float(payload: dict[str, Any], key: str) -> float | None:
+    if key not in payload or payload.get(key) in (None, ""):
+        return None
+    try:
+        return float(payload[key])
+    except (TypeError, ValueError) as exc:
+        raise AnalyzeError(f"{key} must be a number.") from exc
+
+
+def _resolve_place(
+    *,
+    label: str,
+    field: str,
+    query: str,
+    lon: float | None,
+    lat: float | None,
+    name: str | None,
+) -> dict[str, Any]:
+    if lon is not None and lat is not None:
+        return {
+            "query": query,
+            "name": (name or query).strip() or query,
+            "lon": lon,
+            "lat": lat,
+        }
+    try:
+        return mapbox.geocode(query)
+    except mapbox.MapboxError as exc:
+        msg = str(exc)
+        if "No geocoding results" in msg:
+            raise AnalyzeError(
+                f"We couldn’t find that {label}. Pick a suggestion from the list.",
+                status=400,
+                field=field,
+            ) from exc
+        if "not configured" in msg:
+            raise AnalyzeError(msg, status=502) from exc
+        raise AnalyzeError(
+            f"Couldn’t look up that {label}. Try another search and pick a suggestion.",
+            status=502,
+            field=field,
+        ) from exc
+
+
 def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
     origin_q = str(payload.get("origin") or "").strip()
     dest_q = str(payload.get("destination") or "").strip()
-    if not origin_q or not dest_q:
-        raise AnalyzeError("origin and destination are required.")
+    if not origin_q:
+        raise AnalyzeError("Origin is required.", field="origin")
+    if not dest_q:
+        raise AnalyzeError("Destination is required.", field="destination")
 
     try:
         load_weight_lb = float(payload.get("load_weight_lb"))
     except (TypeError, ValueError) as exc:
-        raise AnalyzeError("load_weight_lb must be a number.") from exc
+        raise AnalyzeError(
+            "Load weight must be a number.",
+            field="load_weight_lb",
+        ) from exc
     if load_weight_lb < 0:
-        raise AnalyzeError("load_weight_lb must be non-negative.")
+        raise AnalyzeError(
+            "Load weight must be zero or greater.",
+            field="load_weight_lb",
+        )
 
     try:
         interval = int(payload.get("sample_interval_miles", 25))
     except (TypeError, ValueError) as exc:
-        raise AnalyzeError("sample_interval_miles must be 10, 25, or 50.") from exc
+        raise AnalyzeError(
+            "Sample interval must be 10, 25, or 50 miles.",
+            field="sample_interval_miles",
+        ) from exc
     if interval not in ALLOWED_INTERVALS:
-        raise AnalyzeError("sample_interval_miles must be 10, 25, or 50.")
+        raise AnalyzeError(
+            "Sample interval must be 10, 25, or 50 miles.",
+            field="sample_interval_miles",
+        )
 
     departure_raw = payload.get("departure_at")
     if not departure_raw:
-        raise AnalyzeError("departure_at is required.")
+        raise AnalyzeError("Departure date/time is required.", field="departure_at")
     departure_at = _parse_departure(str(departure_raw))
 
+    origin_lon = _optional_float(payload, "origin_lon")
+    origin_lat = _optional_float(payload, "origin_lat")
+    dest_lon = _optional_float(payload, "destination_lon")
+    dest_lat = _optional_float(payload, "destination_lat")
+    origin_name = str(payload.get("origin_name") or "").strip() or None
+    dest_name = str(payload.get("destination_name") or "").strip() or None
+
+    origin = _resolve_place(
+        label="origin",
+        field="origin",
+        query=origin_q,
+        lon=origin_lon,
+        lat=origin_lat,
+        name=origin_name,
+    )
+    destination = _resolve_place(
+        label="destination",
+        field="destination",
+        query=dest_q,
+        lon=dest_lon,
+        lat=dest_lat,
+        name=dest_name,
+    )
+
+    if abs(origin["lon"] - destination["lon"]) < 1e-6 and abs(
+        origin["lat"] - destination["lat"]
+    ) < 1e-6:
+        raise AnalyzeError(
+            "Origin and destination must be different places.",
+            field="destination",
+        )
+
     try:
-        origin = mapbox.geocode(origin_q)
-        destination = mapbox.geocode(dest_q)
         raw_routes = mapbox.get_route_alternatives(
             (origin["lon"], origin["lat"]),
             (destination["lon"], destination["lat"]),
         )
     except mapbox.MapboxError as exc:
-        raise AnalyzeError(str(exc), status=502) from exc
+        msg = str(exc)
+        if "No routes found" in msg or "NoRoute" in msg:
+            raise AnalyzeError(
+                "No driving route found between those places. Try different locations.",
+                status=400,
+            ) from exc
+        if "not configured" in msg:
+            raise AnalyzeError(msg, status=502) from exc
+        raise AnalyzeError(
+            "Couldn’t calculate routes right now. Please try again in a moment.",
+            status=502,
+        ) from exc
 
     # Build checkpoints for each route (without weather yet).
     route_drafts: list[dict[str, Any]] = []
@@ -96,8 +205,6 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    # Corridor heatmap points: subsample recommended geometry later; for now use
-    # evenly spaced points from the longest route for a shared corridor grid.
     heatmap_base_coords = max(raw_routes, key=lambda r: r["distance_meters"])["coordinates"]
     heatmap_samples = sample_checkpoints(
         heatmap_base_coords,
@@ -113,9 +220,11 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         weather_series = openmeteo.fetch_hourly_weather(all_points, forecast_days=3)
     except openmeteo.WeatherError as exc:
-        raise AnalyzeError(str(exc), status=502) from exc
+        raise AnalyzeError(
+            "Weather data is unavailable right now. Please try again shortly.",
+            status=502,
+        ) from exc
 
-    # Attach weather + risk to route checkpoints.
     for series_idx, (r_idx, c_idx) in enumerate(point_owners):
         series = weather_series[series_idx]
         cp = route_drafts[r_idx]["checkpoints"][c_idx]
@@ -147,7 +256,6 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
 
     recommended_id, reason = recommend_route(routes_out)
 
-    # Heatmap: for each corridor point, 0–48h risk intensity series.
     heatmap_features: list[dict[str, Any]] = []
     for i, point in enumerate(heatmap_samples):
         series = weather_series[heatmap_offset + i]
