@@ -5,7 +5,7 @@ React + Django app that helps a truck driver choose the safest route using weath
 ## Features
 
 - Enter origin, destination, departure time, and load weight
-- Generate up to **3 route alternatives** (Mapbox Directions)
+- Generate up to **3 route options** (Mapbox Directions, with exclude/via fill-in when needed)
 - Sample weather every **10 / 25 / 50 miles** at ETA for each checkpoint (Open-Meteo)
 - Classify risk with wind / rain / snow thresholds and load overrides
 - Recommend the best route (fewest severe miles → high miles → avg risk → shortest time)
@@ -26,22 +26,28 @@ React + Django app that helps a truck driver choose the safest route using weath
 ### 1. API keys
 
 1. Create a free token at [mapbox.com](https://account.mapbox.com/access-tokens/)
-2. Copy `.env.example` → `.env` at the repo root:
+2. Copy env templates:
 
 ```bash
 cp .env.example .env
+cp frontend/.env.example frontend/.env
 ```
 
-Fill in the **repo-root** `.env` (Vite is configured to read from there):
+Fill in the **repo-root** `.env` for Django:
 
 ```env
 MAPBOX_ACCESS_TOKEN=pk....
-VITE_MAPBOX_ACCESS_TOKEN=pk....
 SECRET_KEY=any-dev-secret
 DEBUG=True
 ```
 
-Use the same public Mapbox token for both values in demos. Restart the Vite dev server after changing env vars.
+Fill in **`frontend/.env`** for Vite (Mapbox GL JS):
+
+```env
+VITE_MAPBOX_ACCESS_TOKEN=pk....
+```
+
+Use the same public Mapbox token for both values in demos. Restart the Vite dev server after changing `frontend/.env`.
 
 ### 2. Backend
 
@@ -136,11 +142,12 @@ Load overrides:
 ## Project layout
 
 ```
-backend/          Django project + routing app (risk, clients, analyze API)
-frontend/         Vite React UI (form, map, heatmap slider)
-.env.example      Required environment variables
-nixpacks.toml     Railway build/start
-Procfile          Alternate process definition
+backend/                Django project + routing app (risk, clients, analyze API)
+frontend/               Vite React UI (form, map, heatmap slider)
+frontend/.env.example   Vite env template (VITE_MAPBOX_ACCESS_TOKEN)
+.env.example            Django / server env template
+nixpacks.toml           Railway build/start
+Procfile                Alternate process definition
 ```
 
 ## Notes
