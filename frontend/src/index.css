@@ -43,3 +43,21 @@ body {
   color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Pin the native calendar picker to the right edge of datetime inputs. */
+input[type="datetime-local"].datetime-local-input {
+  position: relative;
+}
+
+input[type="datetime-local"].datetime-local-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+input[type="datetime-local"].datetime-local-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
