@@ -41,12 +41,16 @@ export function PlaceAutocomplete({
   onClearSelection,
 }: PlaceAutocompleteProps) {
   const listId = useId()
+  const errorId = `${listId}-error`
+  const helperId = `${listId}-helper`
+  const statusId = `${listId}-status`
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<PlaceSuggestion[]>([])
   const [activeIndex, setActiveIndex] = useState(-1)
   const [suggestError, setSuggestError] = useState<string | null>(null)
+  const [statusText, setStatusText] = useState("")
 
   useEffect(() => {
     const q = value.trim()
@@ -54,12 +58,14 @@ export function PlaceAutocomplete({
       setResults([])
       setOpen(false)
       setLoading(false)
+      setStatusText("")
       return
     }
     if (q.length < 2) {
       setResults([])
       setLoading(false)
       setSuggestError(null)
+      setStatusText("")
       return
     }
 
@@ -73,6 +79,11 @@ export function PlaceAutocomplete({
         setResults(next)
         setOpen(true)
         setActiveIndex(-1)
+        setStatusText(
+          next.length === 0
+            ? "No matching places"
+            : `${next.length} suggestion${next.length === 1 ? "" : "s"}`,
+        )
       } catch (err) {
         if (cancelled) return
         setResults([])
@@ -82,6 +93,7 @@ export function PlaceAutocomplete({
             : "Couldn’t search places right now.",
         )
         setOpen(true)
+        setStatusText("Place search failed")
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -109,6 +121,7 @@ export function PlaceAutocomplete({
     setOpen(false)
     setResults([])
     setSuggestError(null)
+    setStatusText(`Selected ${place.name}`)
   }
 
   function handleChange(next: string) {
@@ -135,7 +148,23 @@ export function PlaceAutocomplete({
   }
 
   const showNoMatches =
-    open && !loading && !suggestError && value.trim().length >= 2 && results.length === 0 && !selected
+    open &&
+    !loading &&
+    !suggestError &&
+    value.trim().length >= 2 &&
+    results.length === 0 &&
+    !selected
+
+  const describedBy = [
+    error ? errorId : null,
+    !error && helperText ? helperId : null,
+    statusText ? statusId : null,
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+  const activeOptionId =
+    activeIndex >= 0 ? `${listId}-opt-${activeIndex}` : undefined
 
   return (
     <div ref={containerRef} className="relative space-y-2">
@@ -155,14 +184,28 @@ export function PlaceAutocomplete({
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-activedescendant={activeOptionId}
           aria-invalid={Boolean(error)}
+          aria-describedby={describedBy || undefined}
           className={cn(error && "border-destructive focus-visible:ring-destructive")}
         />
         {loading ? (
-          <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <Loader2
+            aria-hidden
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
+          />
         ) : selected ? (
-          <MapPin className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+          <MapPin
+            aria-hidden
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary"
+          />
         ) : null}
+      </div>
+
+      <div id={statusId} className="sr-only" aria-live="polite" aria-atomic="true">
+        {loading ? "Searching places" : statusText}
       </div>
 
       {open && (results.length > 0 || suggestError || showNoMatches) ? (
@@ -172,26 +215,32 @@ export function PlaceAutocomplete({
           className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-card py-1 shadow-md"
         >
           {suggestError ? (
-            <li className="px-3 py-2 text-sm text-destructive">{suggestError}</li>
+            <li className="px-3 py-2 text-sm text-destructive" role="presentation">
+              {suggestError}
+            </li>
           ) : showNoMatches ? (
-            <li className="px-3 py-2 text-sm text-muted-foreground">
+            <li className="px-3 py-2 text-sm text-muted-foreground" role="presentation">
               No matches. Try a city and state, e.g. “Chicago, IL”.
             </li>
           ) : (
             results.map((place, index) => (
-              <li key={place.id}>
+              <li key={place.id} role="presentation">
                 <button
                   type="button"
+                  id={`${listId}-opt-${index}`}
                   role="option"
                   aria-selected={index === activeIndex}
                   className={cn(
-                    "flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
+                    "flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     index === activeIndex && "bg-muted",
                   )}
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => choose(place)}
                 >
-                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <MapPin
+                    aria-hidden
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  />
                   <span>{place.name}</span>
                 </button>
               </li>
@@ -201,9 +250,13 @@ export function PlaceAutocomplete({
       ) : null}
 
       {error ? (
-        <p className="text-xs text-destructive">{error}</p>
+        <p id={errorId} className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
       ) : helperText ? (
-        <p className="text-xs text-muted-foreground">{helperText}</p>
+        <p id={helperId} className="text-xs text-muted-foreground">
+          {helperText}
+        </p>
       ) : null}
     </div>
   )

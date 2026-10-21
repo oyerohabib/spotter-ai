@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 import { ForecastSlider } from "@/components/ForecastSlider"
 import { RouteMap } from "@/components/RouteMap"
@@ -26,9 +26,15 @@ export default function App() {
   const [fieldErrors, setFieldErrors] = useState<TripFieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [statusMessage, setStatusMessage] = useState("")
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [forecastHour, setForecastHour] = useState(0)
+
+  const liveStatus = useMemo(() => {
+    if (loading) return "Analyzing routes…"
+    return statusMessage
+  }, [loading, statusMessage])
 
   function validate(): TripFieldErrors {
     const errors: TripFieldErrors = {}
@@ -68,9 +74,13 @@ export default function App() {
 
   async function handleAnalyze() {
     setFormError(null)
+    setStatusMessage("")
     const errors = validate()
     setFieldErrors(errors)
-    if (Object.keys(errors).length > 0) return
+    if (Object.keys(errors).length > 0) {
+      setStatusMessage("Fix the highlighted form fields, then try again.")
+      return
+    }
     if (!selectedOrigin || !selectedDestination) return
 
     setLoading(true)
@@ -90,9 +100,16 @@ export default function App() {
         sample_interval_miles: form.sampleIntervalMiles,
       })
       setResult(data)
-      setSelectedRouteId(data.recommended_route_id ?? data.routes[0]?.id ?? null)
+      const recommendedId =
+        data.recommended_route_id ?? data.routes[0]?.id ?? null
+      setSelectedRouteId(recommendedId)
       setForecastHour(0)
       setFieldErrors({})
+      const recommendedIndex =
+        data.routes.findIndex((r) => r.id === recommendedId) + 1
+      setStatusMessage(
+        `${data.routes.length} route${data.routes.length === 1 ? "" : "s"} ready. Recommended: Route ${recommendedIndex || 1}.`,
+      )
     } catch (err) {
       if (err instanceof ApiError && err.field) {
         const fieldMap: Record<string, keyof TripFieldErrors> = {
@@ -105,8 +122,13 @@ export default function App() {
         if (key) {
           setFieldErrors({ [key]: err.message })
           setFormError(null)
+          setStatusMessage(err.message)
           const el = document.getElementById(
-            key === "departureAt" ? "departure" : key === "loadWeightLb" ? "load" : key,
+            key === "departureAt"
+              ? "departure"
+              : key === "loadWeightLb"
+                ? "load"
+                : key,
           )
           el?.focus()
           return
@@ -119,6 +141,7 @@ export default function App() {
             ? err.message
             : "Something went wrong."
       setFormError(message)
+      setStatusMessage(message)
     } finally {
       setLoading(false)
     }
@@ -126,6 +149,10 @@ export default function App() {
 
   return (
     <div className="relative flex h-full min-h-svh flex-col overflow-hidden bg-background md:flex-row">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-70"
@@ -135,7 +162,14 @@ export default function App() {
         }}
       />
 
-      <aside className="relative z-10 flex max-h-[48vh] w-full flex-col gap-3 overflow-y-auto border-b border-border/70 bg-background/40 p-4 backdrop-blur-md md:max-h-none md:max-w-sm md:border-b-0 md:border-r lg:max-w-md">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveStatus}
+      </div>
+
+      <aside
+        aria-label="Trip planner"
+        className="relative z-10 flex max-h-[48vh] w-full flex-col gap-3 overflow-y-auto border-b border-border/70 bg-background/40 p-4 backdrop-blur-md md:max-h-none md:max-w-sm md:border-b-0 md:border-r lg:max-w-md"
+      >
         <header className="px-1 pb-1 pt-2">
           <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
             Spotter
@@ -181,7 +215,12 @@ export default function App() {
         ) : null}
       </aside>
 
-      <main className="relative z-10 flex min-w-0 flex-1 flex-col">
+      <main
+        id="main-content"
+        aria-label="Route map"
+        tabIndex={-1}
+        className="relative z-10 flex min-w-0 flex-1 flex-col outline-none"
+      >
         <div className="relative min-h-[50vh] flex-1 overflow-hidden border-l border-border/40 md:min-h-0">
           <RouteMap
             result={result}

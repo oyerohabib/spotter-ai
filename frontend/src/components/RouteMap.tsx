@@ -3,8 +3,13 @@ import mapboxgl from "mapbox-gl"
 import { useEffect, useRef } from "react"
 import "mapbox-gl/dist/mapbox-gl.css"
 
+import { prefersReducedMotion, buildRouteMapSummary } from "@/lib/a11y"
 import { formatEta, RISK_COLORS } from "@/lib/risk"
 import type { AnalyzeResponse, HeatmapPoint, RiskLabel } from "@/types/routing"
+
+function fitDurationMs(): number {
+  return prefersReducedMotion() ? 0 : 800
+}
 
 const ROUTE_COLORS = ["#1f4d3a", "#3d6e8c", "#8a6a3d"]
 
@@ -276,7 +281,10 @@ export function RouteMap({
         const cpSource = map.getSource("checkpoints") as mapboxgl.GeoJSONSource
         routesSource.setData(routesGeoJSON(current, selectedRef.current))
         cpSource.setData(checkpointsGeoJSON(current, selectedRef.current))
-        map.fitBounds(boundsFromResult(current), { padding: 64, duration: 800 })
+        map.fitBounds(boundsFromResult(current), {
+          padding: 64,
+          duration: fitDurationMs(),
+        })
       }
     })
 
@@ -298,7 +306,10 @@ export function RouteMap({
 
     routesSource.setData(routesGeoJSON(result, selectedRouteId))
     cpSource.setData(checkpointsGeoJSON(result, selectedRouteId))
-    map.fitBounds(boundsFromResult(result), { padding: 64, duration: 800 })
+    map.fitBounds(boundsFromResult(result), {
+      padding: 64,
+      duration: fitDurationMs(),
+    })
   }, [result])
 
   useEffect(() => {
@@ -326,9 +337,16 @@ export function RouteMap({
 
   const accessToken = token()
 
+  const summary =
+    result != null ? buildRouteMapSummary(result, selectedRouteId) : null
+
   if (!accessToken) {
     return (
-      <div className="flex h-full items-center justify-center bg-muted/40 p-6 text-center">
+      <div
+        role="region"
+        aria-label="Route map"
+        className="flex h-full items-center justify-center bg-muted/40 p-6 text-center"
+      >
         <p className="max-w-sm text-sm text-muted-foreground">
           Set <code className="font-mono text-foreground">VITE_MAPBOX_ACCESS_TOKEN</code>{" "}
           in your <code className="font-mono text-foreground">.env</code> to render the map.
@@ -337,5 +355,14 @@ export function RouteMap({
     )
   }
 
-  return <div ref={containerRef} className="h-full w-full" />
+  return (
+    <div
+      role="region"
+      aria-label="Route map"
+      className="relative h-full w-full"
+    >
+      {summary ? <p className="sr-only">{summary}</p> : null}
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
+  )
 }

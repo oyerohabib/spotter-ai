@@ -1,4 +1,5 @@
 import { Loader2, Route } from "lucide-react"
+import type { FormEvent } from "react"
 
 import { PlaceAutocomplete } from "@/components/PlaceAutocomplete"
 import { Button } from "@/components/ui/button"
@@ -79,144 +80,182 @@ export function TripForm({
     Boolean(values.departureAt) &&
     values.loadWeightLb.trim() !== ""
 
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    onSubmit()
+  }
+
   return (
     <Card className="border-border/80 bg-card/95 shadow-none backdrop-blur">
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Plan a safer haul</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-lg" id="trip-form-title">
+          Plan a safer haul
+        </CardTitle>
+        <CardDescription id="trip-form-description">
           Search and select origin and destination, then compare weather-aware
           routes.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <PlaceAutocomplete
-          id="origin"
-          label="Origin"
-          value={values.origin}
-          selected={selectedOrigin}
-          error={fieldErrors.origin}
-          helperText={
-            values.origin.trim() && !selectedOrigin
-              ? "Select a place from the list"
-              : null
-          }
-          disabled={loading}
-          onQueryChange={(origin) => onChange({ ...values, origin })}
-          onSelect={onSelectOrigin}
-          onClearSelection={onClearOrigin}
-        />
-
-        <PlaceAutocomplete
-          id="destination"
-          label="Destination"
-          value={values.destination}
-          selected={selectedDestination}
-          error={fieldErrors.destination}
-          helperText={
-            values.destination.trim() && !selectedDestination
-              ? "Select a place from the list"
-              : null
-          }
-          disabled={loading}
-          onQueryChange={(destination) => onChange({ ...values, destination })}
-          onSelect={onSelectDestination}
-          onClearSelection={onClearDestination}
-        />
-
-        <div className="space-y-2">
-          <Label htmlFor="departure">Departure</Label>
-          <Input
-            id="departure"
-            type="datetime-local"
-            value={values.departureAt}
-            onChange={(e) =>
-              onChange({ ...values, departureAt: e.target.value })
-            }
-            disabled={loading}
-            aria-invalid={Boolean(fieldErrors.departureAt)}
-            className={cn(
-              fieldErrors.departureAt &&
-                "border-destructive focus-visible:ring-destructive",
-            )}
-          />
-          {fieldErrors.departureAt ? (
-            <p className="text-xs text-destructive">{fieldErrors.departureAt}</p>
-          ) : null}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="load">Load weight (lb)</Label>
-          <Input
-            id="load"
-            type="number"
-            min={0}
-            step={500}
-            value={values.loadWeightLb}
-            onChange={(e) =>
-              onChange({ ...values, loadWeightLb: e.target.value })
-            }
-            disabled={loading}
-            aria-invalid={Boolean(fieldErrors.loadWeightLb)}
-            className={cn(
-              fieldErrors.loadWeightLb &&
-                "border-destructive focus-visible:ring-destructive",
-            )}
-          />
-          {fieldErrors.loadWeightLb ? (
-            <p className="text-xs text-destructive">{fieldErrors.loadWeightLb}</p>
-          ) : null}
-        </div>
-
-        <div className="space-y-2">
-          <Label>Weather sample interval</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {INTERVALS.map((interval) => {
-              const active = values.sampleIntervalMiles === interval
-              return (
-                <button
-                  key={interval}
-                  type="button"
-                  disabled={loading}
-                  onClick={() =>
-                    onChange({ ...values, sampleIntervalMiles: interval })
-                  }
-                  className={`h-10 rounded-md border text-sm font-medium transition-colors ${
-                    active
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {interval} mi
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {formError ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-left text-sm text-destructive">
-            {formError}
-          </div>
-        ) : null}
-
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={onSubmit}
-          disabled={!canSubmit}
+      <CardContent>
+        <form
+          className="space-y-4"
+          onSubmit={handleSubmit}
+          aria-labelledby="trip-form-title"
+          aria-describedby="trip-form-description"
+          noValidate
         >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Analyzing routes…
-            </>
-          ) : (
-            <>
-              <Route className="h-4 w-4" />
-              Analyze routes
-            </>
-          )}
-        </Button>
+          <PlaceAutocomplete
+            id="origin"
+            label="Origin"
+            value={values.origin}
+            selected={selectedOrigin}
+            error={fieldErrors.origin}
+            helperText={
+              values.origin.trim() && !selectedOrigin
+                ? "Select a place from the list"
+                : null
+            }
+            disabled={loading}
+            onQueryChange={(origin) => onChange({ ...values, origin })}
+            onSelect={onSelectOrigin}
+            onClearSelection={onClearOrigin}
+          />
+
+          <PlaceAutocomplete
+            id="destination"
+            label="Destination"
+            value={values.destination}
+            selected={selectedDestination}
+            error={fieldErrors.destination}
+            helperText={
+              values.destination.trim() && !selectedDestination
+                ? "Select a place from the list"
+                : null
+            }
+            disabled={loading}
+            onQueryChange={(destination) =>
+              onChange({ ...values, destination })
+            }
+            onSelect={onSelectDestination}
+            onClearSelection={onClearDestination}
+          />
+
+          <div className="space-y-2">
+            <Label htmlFor="departure">Departure</Label>
+            <Input
+              id="departure"
+              type="datetime-local"
+              value={values.departureAt}
+              onChange={(e) =>
+                onChange({ ...values, departureAt: e.target.value })
+              }
+              disabled={loading}
+              aria-invalid={Boolean(fieldErrors.departureAt)}
+              aria-describedby={
+                fieldErrors.departureAt ? "departure-error" : undefined
+              }
+              className={cn(
+                fieldErrors.departureAt &&
+                  "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+            {fieldErrors.departureAt ? (
+              <p id="departure-error" className="text-xs text-destructive" role="alert">
+                {fieldErrors.departureAt}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="load">Load weight (lb)</Label>
+            <Input
+              id="load"
+              type="number"
+              min={0}
+              step={500}
+              value={values.loadWeightLb}
+              onChange={(e) =>
+                onChange({ ...values, loadWeightLb: e.target.value })
+              }
+              disabled={loading}
+              aria-invalid={Boolean(fieldErrors.loadWeightLb)}
+              aria-describedby={
+                fieldErrors.loadWeightLb ? "load-error" : undefined
+              }
+              className={cn(
+                fieldErrors.loadWeightLb &&
+                  "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+            {fieldErrors.loadWeightLb ? (
+              <p id="load-error" className="text-xs text-destructive" role="alert">
+                {fieldErrors.loadWeightLb}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label id="sample-interval-label">Weather sample interval</Label>
+            <div
+              role="radiogroup"
+              aria-labelledby="sample-interval-label"
+              className="grid grid-cols-3 gap-2"
+            >
+              {INTERVALS.map((interval) => {
+                const active = values.sampleIntervalMiles === interval
+                return (
+                  <button
+                    key={interval}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    disabled={loading}
+                    onClick={() =>
+                      onChange({ ...values, sampleIntervalMiles: interval })
+                    }
+                    className={cn(
+                      "h-10 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-foreground hover:bg-muted",
+                    )}
+                  >
+                    {interval} mi
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {formError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-left text-sm text-destructive"
+            >
+              {formError}
+            </div>
+          ) : null}
+
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            disabled={!canSubmit}
+            aria-busy={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                Analyzing routes…
+              </>
+            ) : (
+              <>
+                <Route aria-hidden className="h-4 w-4" />
+                Analyze routes
+              </>
+            )}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   )
