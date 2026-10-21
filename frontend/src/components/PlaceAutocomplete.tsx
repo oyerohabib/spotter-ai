@@ -97,7 +97,7 @@ export function PlaceAutocomplete({
       } finally {
         if (!cancelled) setLoading(false)
       }
-    }, 300)
+    }, 500)
 
     return () => {
       cancelled = true
@@ -189,7 +189,11 @@ export function PlaceAutocomplete({
           aria-activedescendant={activeOptionId}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy || undefined}
-          className={cn(error && "border-destructive focus-visible:ring-destructive")}
+          className={cn(
+            // Reserve space so long place names don't sit under the trailing icon.
+            (loading || selected) && "pr-10",
+            error && "border-destructive focus-visible:ring-destructive",
+          )}
         />
         {loading ? (
           <Loader2
