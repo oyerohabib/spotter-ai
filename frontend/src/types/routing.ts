@@ -9,6 +9,19 @@ export interface Place {
   lat: number
 }
 
+export interface PlaceSuggestion {
+  id: string
+  name: string
+  lon: number
+  lat: number
+}
+
+export interface SelectedPlace {
+  name: string
+  lon: number
+  lat: number
+}
+
 export interface CheckpointWeather {
   wind_mph: number
   rain_in_hr: number
@@ -92,4 +105,10 @@ export interface AnalyzeRequest {
   departure_at: string
   load_weight_lb: number
   sample_interval_miles: SampleInterval
+  origin_lon?: number
+  origin_lat?: number
+  origin_name?: string
+  destination_lon?: number
+  destination_lat?: number
+  destination_name?: string
 }

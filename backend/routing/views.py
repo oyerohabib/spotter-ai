@@ -50,7 +50,7 @@ class AnalyzeRoutesView(APIView):
             if exc.field:
                 body["field"] = exc.field
             return Response(body, status=exc.status)
-        except Exception as exc:  # pragma: no cover - unexpected
+        except Exception:  # pragma: no cover - unexpected
             return Response(
                 {"detail": "Something went wrong. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

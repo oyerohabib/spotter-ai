@@ -1,5 +1,6 @@
 import { Loader2, Route } from "lucide-react"
 
+import { PlaceAutocomplete } from "@/components/PlaceAutocomplete"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -10,7 +11,8 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { SampleInterval } from "@/types/routing"
+import { cn } from "@/lib/utils"
+import type { SampleInterval, SelectedPlace } from "@/types/routing"
 
 export interface TripFormValues {
   origin: string
@@ -20,12 +22,23 @@ export interface TripFormValues {
   sampleIntervalMiles: SampleInterval
 }
 
+export type TripFieldErrors = Partial<
+  Record<"origin" | "destination" | "departureAt" | "loadWeightLb", string>
+>
+
 interface TripFormProps {
   values: TripFormValues
+  selectedOrigin: SelectedPlace | null
+  selectedDestination: SelectedPlace | null
+  fieldErrors: TripFieldErrors
+  formError: string | null
   onChange: (values: TripFormValues) => void
+  onSelectOrigin: (place: SelectedPlace) => void
+  onSelectDestination: (place: SelectedPlace) => void
+  onClearOrigin: () => void
+  onClearDestination: () => void
   onSubmit: () => void
   loading: boolean
-  error: string | null
 }
 
 const INTERVALS: SampleInterval[] = [10, 25, 50]
@@ -37,8 +50,8 @@ function toLocalInputValue(d: Date): string {
 
 export function defaultTripFormValues(): TripFormValues {
   return {
-    origin: "Chicago, IL",
-    destination: "Detroit, MI",
+    origin: "",
+    destination: "",
     departureAt: toLocalInputValue(new Date()),
     loadWeightLb: "35000",
     sampleIntervalMiles: 25,
@@ -47,42 +60,69 @@ export function defaultTripFormValues(): TripFormValues {
 
 export function TripForm({
   values,
+  selectedOrigin,
+  selectedDestination,
+  fieldErrors,
+  formError,
   onChange,
+  onSelectOrigin,
+  onSelectDestination,
+  onClearOrigin,
+  onClearDestination,
   onSubmit,
   loading,
-  error,
 }: TripFormProps) {
+  const canSubmit =
+    !loading &&
+    Boolean(selectedOrigin) &&
+    Boolean(selectedDestination) &&
+    Boolean(values.departureAt) &&
+    values.loadWeightLb.trim() !== ""
+
   return (
     <Card className="border-border/80 bg-card/95 shadow-none backdrop-blur">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Plan a safer haul</CardTitle>
         <CardDescription>
-          Compare three routes with weather risk sampled along the corridor.
+          Search and select origin and destination, then compare weather-aware
+          routes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="origin">Origin</Label>
-          <Input
-            id="origin"
-            value={values.origin}
-            onChange={(e) => onChange({ ...values, origin: e.target.value })}
-            placeholder="City or address"
-            disabled={loading}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="destination">Destination</Label>
-          <Input
-            id="destination"
-            value={values.destination}
-            onChange={(e) =>
-              onChange({ ...values, destination: e.target.value })
-            }
-            placeholder="City or address"
-            disabled={loading}
-          />
-        </div>
+        <PlaceAutocomplete
+          id="origin"
+          label="Origin"
+          value={values.origin}
+          selected={selectedOrigin}
+          error={fieldErrors.origin}
+          helperText={
+            values.origin.trim() && !selectedOrigin
+              ? "Select a place from the list"
+              : null
+          }
+          disabled={loading}
+          onQueryChange={(origin) => onChange({ ...values, origin })}
+          onSelect={onSelectOrigin}
+          onClearSelection={onClearOrigin}
+        />
+
+        <PlaceAutocomplete
+          id="destination"
+          label="Destination"
+          value={values.destination}
+          selected={selectedDestination}
+          error={fieldErrors.destination}
+          helperText={
+            values.destination.trim() && !selectedDestination
+              ? "Select a place from the list"
+              : null
+          }
+          disabled={loading}
+          onQueryChange={(destination) => onChange({ ...values, destination })}
+          onSelect={onSelectDestination}
+          onClearSelection={onClearDestination}
+        />
+
         <div className="space-y-2">
           <Label htmlFor="departure">Departure</Label>
           <Input
@@ -93,8 +133,17 @@ export function TripForm({
               onChange({ ...values, departureAt: e.target.value })
             }
             disabled={loading}
+            aria-invalid={Boolean(fieldErrors.departureAt)}
+            className={cn(
+              fieldErrors.departureAt &&
+                "border-destructive focus-visible:ring-destructive",
+            )}
           />
+          {fieldErrors.departureAt ? (
+            <p className="text-xs text-destructive">{fieldErrors.departureAt}</p>
+          ) : null}
         </div>
+
         <div className="space-y-2">
           <Label htmlFor="load">Load weight (lb)</Label>
           <Input
@@ -107,8 +156,17 @@ export function TripForm({
               onChange({ ...values, loadWeightLb: e.target.value })
             }
             disabled={loading}
+            aria-invalid={Boolean(fieldErrors.loadWeightLb)}
+            className={cn(
+              fieldErrors.loadWeightLb &&
+                "border-destructive focus-visible:ring-destructive",
+            )}
           />
+          {fieldErrors.loadWeightLb ? (
+            <p className="text-xs text-destructive">{fieldErrors.loadWeightLb}</p>
+          ) : null}
         </div>
+
         <div className="space-y-2">
           <Label>Weather sample interval</Label>
           <div className="grid grid-cols-3 gap-2">
@@ -135,9 +193,9 @@ export function TripForm({
           </div>
         </div>
 
-        {error ? (
+        {formError ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-left text-sm text-destructive">
-            {error}
+            {formError}
           </div>
         ) : null}
 
@@ -145,7 +203,7 @@ export function TripForm({
           className="w-full"
           size="lg"
           onClick={onSubmit}
-          disabled={loading}
+          disabled={!canSubmit}
         >
           {loading ? (
             <>
