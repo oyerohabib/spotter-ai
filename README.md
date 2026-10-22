@@ -163,16 +163,6 @@ After deploy:
 
 **Important:** Redeploy after changing `VITE_MAPBOX_ACCESS_TOKEN` so the frontend rebuild picks it up.
 
-## Loom walkthrough checklist (5–10 min)
-
-1. Show trip form defaults (Chicago → Detroit) and load weight
-2. Run **Analyze routes** and wait for results
-3. Point out recommended route badge and severe/high mile stats
-4. Hover checkpoints on the map (ETA + wind/rain/snow + risk)
-5. Scrub the **0–48h** forecast slider and show heatmap updates (no refetch)
-6. Change sample interval / load weight and re-run to show recommendation shift
-7. Briefly open the risk rules section in this README
-
 ## Project layout
 
 ```
