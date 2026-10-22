@@ -110,6 +110,40 @@ Load overrides:
 - 45–54 mph + load &gt; 30,000 lb → **No Travel**
 - 35–44 mph + load &gt; 40,000 lb → **Severe**
 
+## Deploy on Render (recommended if Railway is unavailable)
+
+Create a **Web Service** from this GitHub repo. Leave **Root Directory** empty. Do **not** use Render’s default Python commands.
+
+| Field | Value |
+| --- | --- |
+| Language | Python 3 |
+| Branch | `main` |
+| Root Directory | *(leave blank)* |
+| Build Command | `bash bin/render-build.sh` |
+| Start Command | `cd backend && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT` |
+
+Environment variables (add before first deploy):
+
+| Variable | Value |
+| --- | --- |
+| `SECRET_KEY` | strong random string |
+| `DEBUG` | `False` |
+| `ALLOWED_HOSTS` | `.onrender.com` (or your exact hostname, e.g. `spotter-ai.onrender.com`) |
+| `CSRF_TRUSTED_ORIGINS` | `https://spotter-ai.onrender.com` (your real URL) |
+| `MAPBOX_ACCESS_TOKEN` | Mapbox token |
+| `VITE_MAPBOX_ACCESS_TOKEN` | same token — **required at build time** for the map |
+
+After deploy:
+
+1. Open `https://<your-service>.onrender.com/api/health/` — should return `{"status":"ok"}`
+2. Open the root URL, select places, analyze
+
+**Notes**
+
+- Free Render instances sleep when idle; the first request after sleep can take ~30–60s
+- Changing `VITE_MAPBOX_ACCESS_TOKEN` requires a **redeploy** (rebuild) so Vite can bake it in
+- `RENDER_EXTERNAL_HOSTNAME` / `RENDER_EXTERNAL_URL` are set by Render automatically and are honored in Django settings
+
 ## Deploy on Railway
 
 1. Push this repo to GitHub and create a Railway project from it
@@ -147,6 +181,7 @@ frontend/               Vite React UI (form, map, heatmap slider)
 frontend/.env.example   Vite env template (VITE_MAPBOX_ACCESS_TOKEN)
 .env.example            Django / server env template
 nixpacks.toml           Railway build/start
+bin/render-build.sh     Render build (Python + Node)
 Procfile                Alternate process definition
 ```
 

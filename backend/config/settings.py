@@ -18,11 +18,16 @@ ALLOWED_HOSTS = [
     for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
-# Railway / reverse-proxy convenience
+# Hosting platform convenience (Railway / Render)
 if os.getenv("RAILWAY_PUBLIC_DOMAIN"):
     ALLOWED_HOSTS.append(os.environ["RAILWAY_PUBLIC_DOMAIN"])
 if os.getenv("RAILWAY_STATIC_URL"):
-    ALLOWED_HOSTS.append(os.environ["RAILWAY_STATIC_URL"].replace("https://", "").replace("http://", ""))
+    ALLOWED_HOSTS.append(
+        os.environ["RAILWAY_STATIC_URL"].replace("https://", "").replace("http://", "")
+    )
+# Render sets this automatically for the public hostname.
+if os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -125,5 +130,9 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 ]
+if os.getenv("RENDER_EXTERNAL_URL"):
+    _render_url = os.environ["RENDER_EXTERNAL_URL"].rstrip("/")
+    if _render_url not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_render_url)
 
 MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
