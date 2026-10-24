@@ -6,7 +6,7 @@ React + Django app that helps a truck driver choose the safest route using weath
 
 - Enter origin, destination, departure time, and load weight
 - Generate up to **3 route options** (Mapbox Directions, with exclude/via fill-in when needed)
-- Sample weather every **10 / 25 / 50 miles** at ETA for each checkpoint (Open-Meteo)
+- Sample weather every **10 / 25 / 50 miles** at ETA for each checkpoint (Open-Meteo in the browser)
 - Classify risk with wind / rain / snow thresholds and load overrides
 - Recommend the best route (fewest severe miles → high miles → avg risk → shortest time)
 - Map view with routes, risk-colored checkpoints, corridor **heatmap**, and **0–48h** forecast slider
@@ -18,8 +18,8 @@ React + Django app that helps a truck driver choose the safest route using weath
 | Frontend | Vite, React, TypeScript, Tailwind, shadcn-style UI |
 | Backend | Django, Django REST Framework |
 | Routing / map | Mapbox Geocoding, Directions, Mapbox GL JS |
-| Weather | Open-Meteo (no API key) |
-| Hosting | Railway (Django + built SPA via WhiteNoise) |
+| Weather | Open-Meteo from the **browser** (visitor IP; no API key) |
+| Hosting | Render (recommended) / Railway |
 
 ## Quick start (local)
 
@@ -82,7 +82,13 @@ python manage.py test routing
 
 ## API
 
-`POST /api/routes/analyze/`
+Analyze is a **two-step** flow (the SPA orchestrates both; weather is fetched in the browser so Open-Meteo uses the visitor’s IP, not the host’s):
+
+1. `POST /api/routes/plan/` — Mapbox geocode + alternatives + checkpoint sampling (no weather)
+2. Browser → Open-Meteo for `weather_points`
+3. `POST /api/routes/score/` — `{ plan, weather_series }` → risk, recommendation, heatmap
+
+Plan request body:
 
 ```json
 {
@@ -94,7 +100,7 @@ python manage.py test routing
 }
 ```
 
-Returns geocoded places, up to three scored routes (geometry, checkpoints, risk summaries), recommendation, and heatmap hourly samples for the slider.
+Score returns geocoded places, up to three scored routes (geometry, checkpoints, risk summaries), recommendation, and heatmap hourly samples for the slider.
 
 ## Risk rules
 
@@ -143,7 +149,7 @@ After deploy:
 - Free Render instances sleep when idle; the first request after sleep can take ~30–60s
 - Changing `VITE_MAPBOX_ACCESS_TOKEN` requires a **redeploy** (rebuild) so Vite can bake it in
 - `RENDER_EXTERNAL_HOSTNAME` / `RENDER_EXTERNAL_URL` are set by Render automatically and are honored in Django settings
-- Open-Meteo’s free API [rate-limits shared cloud IPs](https://open-meteo.com/en/terms) (Render included) more aggressively than home networks. The app dedupes points and retries on 429; if weather still fails, wait a minute and retry, or set `OPEN_METEO_FORECAST_URL` to a customer/self-hosted Open-Meteo endpoint
+- Open-Meteo runs in the **browser** (visitor IP) so Render’s shared egress IP is not used for weather. Mapbox still runs on the server.
 
 ## Deploy on Railway
 
@@ -178,6 +184,6 @@ Procfile                Alternate process definition
 
 ## Notes
 
-- Open-Meteo is used for weather and requires no key
+- Open-Meteo is fetched in the browser and requires no key
 - Correctness of risk scoring and recommendation ranking is covered by unit tests under `backend/routing/tests/`
 - Prioritize clarity over extras — no auth or trip persistence by design
