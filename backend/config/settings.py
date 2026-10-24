@@ -136,3 +136,8 @@ if os.getenv("RENDER_EXTERNAL_URL"):
         CSRF_TRUSTED_ORIGINS.append(_render_url)
 
 MAPBOX_ACCESS_TOKEN = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+# Optional override (e.g. Open-Meteo customer API or self-hosted).
+OPEN_METEO_FORECAST_URL = os.getenv(
+    "OPEN_METEO_FORECAST_URL",
+    "https://api.open-meteo.com/v1/forecast",
+)

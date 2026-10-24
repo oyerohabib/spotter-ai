@@ -143,6 +143,7 @@ After deploy:
 - Free Render instances sleep when idle; the first request after sleep can take ~30–60s
 - Changing `VITE_MAPBOX_ACCESS_TOKEN` requires a **redeploy** (rebuild) so Vite can bake it in
 - `RENDER_EXTERNAL_HOSTNAME` / `RENDER_EXTERNAL_URL` are set by Render automatically and are honored in Django settings
+- Open-Meteo’s free API [rate-limits shared cloud IPs](https://open-meteo.com/en/terms) (Render included) more aggressively than home networks. The app dedupes points and retries on 429; if weather still fails, wait a minute and retry, or set `OPEN_METEO_FORECAST_URL` to a customer/self-hosted Open-Meteo endpoint
 
 ## Deploy on Railway
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,7 @@ from .sampling import METERS_PER_MILE, sample_checkpoints
 
 
 ALLOWED_INTERVALS = {10, 25, 50}
+logger = logging.getLogger(__name__)
 
 
 class AnalyzeError(Exception):
@@ -220,10 +222,16 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         weather_series = openmeteo.fetch_hourly_weather(all_points, forecast_days=3)
     except openmeteo.WeatherError as exc:
-        raise AnalyzeError(
-            "Weather data is unavailable right now. Please try again shortly.",
-            status=502,
-        ) from exc
+        logger.warning("Weather fetch failed: %s", exc)
+        detail = str(exc)
+        if "rate-limited" in detail.lower() or "429" in detail:
+            message = (
+                "Weather provider is rate-limiting this server "
+                "(common on shared hosts like Render). Wait a minute and try again."
+            )
+        else:
+            message = "Weather data is unavailable right now. Please try again shortly."
+        raise AnalyzeError(message, status=502) from exc
 
     for series_idx, (r_idx, c_idx) in enumerate(point_owners):
         series = weather_series[series_idx]
