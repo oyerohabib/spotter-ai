@@ -2,7 +2,10 @@ import type {
   AnalyzeRequest,
   AnalyzeResponse,
   PlaceSuggestion,
+  PlanResponse,
+  WeatherSeries,
 } from "@/types/routing"
+import { fetchHourlyWeather, WeatherClientError } from "@/lib/openmeteo"
 
 export class ApiError extends Error {
   status: number
@@ -58,19 +61,54 @@ export async function suggestPlaces(query: string): Promise<PlaceSuggestion[]> {
   return results
 }
 
-export async function analyzeRoutes(
-  payload: AnalyzeRequest,
-): Promise<AnalyzeResponse> {
-  const res = await fetch("/api/routes/analyze/", {
+async function planRoutes(payload: AnalyzeRequest): Promise<PlanResponse> {
+  const res = await fetch("/api/routes/plan/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   })
-
   const data = await parseJson(res)
   if (!res.ok) {
     throwApiError(res, data)
   }
+  return data as PlanResponse
+}
 
+async function scoreRoutes(
+  plan: PlanResponse,
+  weatherSeries: WeatherSeries[],
+): Promise<AnalyzeResponse> {
+  const res = await fetch("/api/routes/score/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      plan,
+      weather_series: weatherSeries,
+    }),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throwApiError(res, data)
+  }
   return data as AnalyzeResponse
+}
+
+/**
+ * Plan routes on the server (Mapbox), fetch Open-Meteo in the browser,
+ * then score risk on the server.
+ */
+export async function analyzeRoutes(
+  payload: AnalyzeRequest,
+): Promise<AnalyzeResponse> {
+  const plan = await planRoutes(payload)
+  let weatherSeries: WeatherSeries[]
+  try {
+    weatherSeries = await fetchHourlyWeather(plan.weather_points, 3)
+  } catch (err) {
+    if (err instanceof WeatherClientError) {
+      throw new ApiError(err.message, 502)
+    }
+    throw err
+  }
+  return scoreRoutes(plan, weatherSeries)
 }
