@@ -112,3 +112,49 @@ export interface AnalyzeRequest {
   destination_lat?: number
   destination_name?: string
 }
+
+/** Checkpoint before weather/risk scoring. */
+export interface PlannedCheckpoint {
+  index: number
+  lon: number
+  lat: number
+  miles_from_origin: number
+  eta: string
+}
+
+export interface PlannedRoute {
+  id: string
+  distance_miles: number
+  duration_seconds: number
+  duration_minutes: number
+  geometry: {
+    type: "LineString"
+    coordinates: [number, number][]
+  }
+  checkpoints: PlannedCheckpoint[]
+}
+
+export interface PlanResponse {
+  origin: Place
+  destination: Place
+  departure_at: string
+  load_weight_lb: number
+  sample_interval_miles: SampleInterval
+  routes: PlannedRoute[]
+  heatmap: {
+    hours: number
+    points: Array<{ lon: number; lat: number; miles_from_origin: number }>
+  }
+  /** Ordered lon/lat list for browser Open-Meteo fetch (checkpoints then heatmap). */
+  weather_points: Array<{ lon: number; lat: number }>
+}
+
+export interface WeatherSeries {
+  lon?: number
+  lat?: number
+  times: string[]
+  wind_mph: number[]
+  precip_in: number[]
+  snowfall: number[]
+  temp_c: number[]
+}
