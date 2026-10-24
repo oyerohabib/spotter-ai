@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .clients import mapbox
-from .services import AnalyzeError, analyze_routes
+from .services import AnalyzeError, plan_routes, score_routes
 
 
 class HealthView(APIView):
@@ -38,18 +38,39 @@ class PlaceSuggestView(APIView):
         return Response({"results": results})
 
 
-class AnalyzeRoutesView(APIView):
+def _handle_analyze_error(exc: AnalyzeError) -> Response:
+    body: dict = {"detail": str(exc)}
+    if exc.field:
+        body["field"] = exc.field
+    return Response(body, status=exc.status)
+
+
+class PlanRoutesView(APIView):
     authentication_classes = []
     permission_classes = []
 
     def post(self, request):
         try:
-            result = analyze_routes(request.data if isinstance(request.data, dict) else {})
+            result = plan_routes(request.data if isinstance(request.data, dict) else {})
         except AnalyzeError as exc:
-            body: dict = {"detail": str(exc)}
-            if exc.field:
-                body["field"] = exc.field
-            return Response(body, status=exc.status)
+            return _handle_analyze_error(exc)
+        except Exception:  # pragma: no cover - unexpected
+            return Response(
+                {"detail": "Something went wrong. Please try again."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(result)
+
+
+class ScoreRoutesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            result = score_routes(request.data if isinstance(request.data, dict) else {})
+        except AnalyzeError as exc:
+            return _handle_analyze_error(exc)
         except Exception:  # pragma: no cover - unexpected
             return Response(
                 {"detail": "Something went wrong. Please try again."},

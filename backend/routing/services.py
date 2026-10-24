@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,7 +12,6 @@ from .sampling import METERS_PER_MILE, sample_checkpoints
 
 
 ALLOWED_INTERVALS = {10, 25, 50}
-logger = logging.getLogger(__name__)
 
 
 class AnalyzeError(Exception):
@@ -86,7 +84,7 @@ def _resolve_place(
         ) from exc
 
 
-def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
+def _parse_trip_inputs(payload: dict[str, Any]) -> dict[str, Any]:
     origin_q = str(payload.get("origin") or "").strip()
     dest_q = str(payload.get("destination") or "").strip()
     if not origin_q:
@@ -125,28 +123,44 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
         raise AnalyzeError("Departure date/time is required.", field="departure_at")
     departure_at = _parse_departure(str(departure_raw))
 
-    origin_lon = _optional_float(payload, "origin_lon")
-    origin_lat = _optional_float(payload, "origin_lat")
-    dest_lon = _optional_float(payload, "destination_lon")
-    dest_lat = _optional_float(payload, "destination_lat")
-    origin_name = str(payload.get("origin_name") or "").strip() or None
-    dest_name = str(payload.get("destination_name") or "").strip() or None
+    return {
+        "origin_q": origin_q,
+        "dest_q": dest_q,
+        "load_weight_lb": load_weight_lb,
+        "interval": interval,
+        "departure_at": departure_at,
+        "origin_lon": _optional_float(payload, "origin_lon"),
+        "origin_lat": _optional_float(payload, "origin_lat"),
+        "dest_lon": _optional_float(payload, "destination_lon"),
+        "dest_lat": _optional_float(payload, "destination_lat"),
+        "origin_name": str(payload.get("origin_name") or "").strip() or None,
+        "dest_name": str(payload.get("destination_name") or "").strip() or None,
+    }
+
+
+def plan_routes(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Geocode + Mapbox alternatives + checkpoint sampling (no weather).
+
+    Returns a plan the browser can enrich with Open-Meteo, then POST to score_routes.
+    """
+    inputs = _parse_trip_inputs(payload)
 
     origin = _resolve_place(
         label="origin",
         field="origin",
-        query=origin_q,
-        lon=origin_lon,
-        lat=origin_lat,
-        name=origin_name,
+        query=inputs["origin_q"],
+        lon=inputs["origin_lon"],
+        lat=inputs["origin_lat"],
+        name=inputs["origin_name"],
     )
     destination = _resolve_place(
         label="destination",
         field="destination",
-        query=dest_q,
-        lon=dest_lon,
-        lat=dest_lat,
-        name=dest_name,
+        query=inputs["dest_q"],
+        lon=inputs["dest_lon"],
+        lat=inputs["dest_lat"],
+        name=inputs["dest_name"],
     )
 
     if abs(origin["lon"] - destination["lon"]) < 1e-6 and abs(
@@ -176,12 +190,12 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
             status=502,
         ) from exc
 
-    # Build checkpoints for each route (without weather yet).
-    route_drafts: list[dict[str, Any]] = []
-    all_points: list[tuple[float, float]] = []
-    point_owners: list[tuple[int, int]] = []  # (route_idx, checkpoint_idx)
+    interval = inputs["interval"]
+    departure_at = inputs["departure_at"]
+    routes_out: list[dict[str, Any]] = []
+    weather_points: list[dict[str, float]] = []
 
-    for r_idx, route in enumerate(raw_routes):
+    for route in raw_routes:
         coords = route["coordinates"]
         distance_miles = route["distance_meters"] / METERS_PER_MILE
         checkpoints = sample_checkpoints(
@@ -191,13 +205,13 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
             departure_at=departure_at,
             total_distance_miles=distance_miles,
         )
-        for c_idx, cp in enumerate(checkpoints):
-            all_points.append((cp["lon"], cp["lat"]))
-            point_owners.append((r_idx, c_idx))
-        route_drafts.append(
+        for cp in checkpoints:
+            weather_points.append({"lon": cp["lon"], "lat": cp["lat"]})
+        routes_out.append(
             {
-                **route,
+                "id": route["id"],
                 "distance_miles": round(distance_miles, 2),
+                "duration_seconds": route["duration_seconds"],
                 "duration_minutes": round(route["duration_seconds"] / 60.0, 1),
                 "geometry": {
                     "type": "LineString",
@@ -215,49 +229,114 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
         departure_at=departure_at,
         total_distance_miles=max(r["distance_meters"] for r in raw_routes) / METERS_PER_MILE,
     )
-    heatmap_points = [(p["lon"], p["lat"]) for p in heatmap_samples]
-    heatmap_offset = len(all_points)
-    all_points.extend(heatmap_points)
+    heatmap_point_meta = [
+        {
+            "lon": p["lon"],
+            "lat": p["lat"],
+            "miles_from_origin": p["miles_from_origin"],
+        }
+        for p in heatmap_samples
+    ]
+    for point in heatmap_point_meta:
+        weather_points.append({"lon": point["lon"], "lat": point["lat"]})
+
+    return {
+        "origin": origin,
+        "destination": destination,
+        "departure_at": departure_at.isoformat(),
+        "load_weight_lb": inputs["load_weight_lb"],
+        "sample_interval_miles": interval,
+        "routes": routes_out,
+        "heatmap": {
+            "hours": 48,
+            "points": heatmap_point_meta,
+        },
+        "weather_points": weather_points,
+    }
+
+
+def score_routes(payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    Attach client-fetched Open-Meteo series to a plan and compute risk + recommendation.
+    """
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        raise AnalyzeError("Plan payload is required.", field="plan")
+
+    weather_series = payload.get("weather_series")
+    if not isinstance(weather_series, list) or not weather_series:
+        raise AnalyzeError(
+            "Weather series from Open-Meteo is required.",
+            field="weather_series",
+        )
+
+    routes_in = plan.get("routes")
+    if not isinstance(routes_in, list) or not routes_in:
+        raise AnalyzeError("Plan must include routes.", field="plan")
+
+    heatmap = plan.get("heatmap") or {}
+    heatmap_points = heatmap.get("points") if isinstance(heatmap, dict) else None
+    if not isinstance(heatmap_points, list):
+        heatmap_points = []
 
     try:
-        weather_series = openmeteo.fetch_hourly_weather(all_points, forecast_days=3)
-    except openmeteo.WeatherError as exc:
-        logger.warning("Weather fetch failed: %s", exc)
-        detail = str(exc)
-        if "rate-limited" in detail.lower() or "429" in detail:
-            message = (
-                "Weather provider is rate-limiting this server "
-                "(common on shared hosts like Render). Wait a minute and try again."
-            )
-        else:
-            message = "Weather data is unavailable right now. Please try again shortly."
-        raise AnalyzeError(message, status=502) from exc
+        load_weight_lb = float(plan.get("load_weight_lb"))
+    except (TypeError, ValueError) as exc:
+        raise AnalyzeError(
+            "Load weight must be a number.",
+            field="load_weight_lb",
+        ) from exc
 
-    for series_idx, (r_idx, c_idx) in enumerate(point_owners):
-        series = weather_series[series_idx]
-        cp = route_drafts[r_idx]["checkpoints"][c_idx]
-        when = datetime.fromisoformat(cp["eta"])
-        wx = openmeteo.weather_at_time(series, when)
-        risk = classify_checkpoint(
-            wind_mph=wx["wind_mph"],
-            rain_in_hr=wx["rain_in_hr"],
-            snow_in_hr=wx["snow_in_hr"],
-            load_weight_lb=load_weight_lb,
+    checkpoint_count = sum(
+        len(r.get("checkpoints") or []) for r in routes_in if isinstance(r, dict)
+    )
+    expected = checkpoint_count + len(heatmap_points)
+    if len(weather_series) != expected:
+        raise AnalyzeError(
+            f"Expected {expected} weather series entries, got {len(weather_series)}.",
+            field="weather_series",
         )
-        cp["weather"] = wx
-        cp.update(risk)
 
+    series_idx = 0
     routes_out: list[dict[str, Any]] = []
-    for draft in route_drafts:
-        summary = summarize_route_risk(draft["checkpoints"])
+    for route in routes_in:
+        if not isinstance(route, dict):
+            raise AnalyzeError("Invalid route in plan.", field="plan")
+        checkpoints = route.get("checkpoints") or []
+        if not isinstance(checkpoints, list):
+            raise AnalyzeError("Invalid checkpoints in plan.", field="plan")
+
+        scored_checkpoints: list[dict[str, Any]] = []
+        for cp in checkpoints:
+            if not isinstance(cp, dict):
+                raise AnalyzeError("Invalid checkpoint in plan.", field="plan")
+            series = weather_series[series_idx]
+            series_idx += 1
+            if not isinstance(series, dict):
+                raise AnalyzeError("Invalid weather series entry.", field="weather_series")
+            eta_raw = cp.get("eta")
+            if not eta_raw:
+                raise AnalyzeError("Checkpoint is missing ETA.", field="plan")
+            when = datetime.fromisoformat(str(eta_raw).replace("Z", "+00:00"))
+            wx = openmeteo.weather_at_time(series, when)
+            risk = classify_checkpoint(
+                wind_mph=wx["wind_mph"],
+                rain_in_hr=wx["rain_in_hr"],
+                snow_in_hr=wx["snow_in_hr"],
+                load_weight_lb=load_weight_lb,
+            )
+            scored = {**cp, "weather": wx, **risk}
+            scored_checkpoints.append(scored)
+
+        summary = summarize_route_risk(scored_checkpoints)
         routes_out.append(
             {
-                "id": draft["id"],
-                "distance_miles": draft["distance_miles"],
-                "duration_seconds": draft["duration_seconds"],
-                "duration_minutes": draft["duration_minutes"],
-                "geometry": draft["geometry"],
-                "checkpoints": draft["checkpoints"],
+                "id": route.get("id"),
+                "distance_miles": route.get("distance_miles"),
+                "duration_seconds": route.get("duration_seconds"),
+                "duration_minutes": route.get("duration_minutes"),
+                "geometry": route.get("geometry"),
+                "checkpoints": scored_checkpoints,
                 "summary": summary,
             }
         )
@@ -265,24 +344,29 @@ def analyze_routes(payload: dict[str, Any]) -> dict[str, Any]:
     recommended_id, reason = recommend_route(routes_out)
 
     heatmap_features: list[dict[str, Any]] = []
-    for i, point in enumerate(heatmap_samples):
-        series = weather_series[heatmap_offset + i]
+    for point in heatmap_points:
+        if not isinstance(point, dict):
+            raise AnalyzeError("Invalid heatmap point in plan.", field="plan")
+        series = weather_series[series_idx]
+        series_idx += 1
+        if not isinstance(series, dict):
+            raise AnalyzeError("Invalid weather series entry.", field="weather_series")
         hourly = openmeteo.build_heatmap_series(series, hours=49)
         heatmap_features.append(
             {
-                "lon": point["lon"],
-                "lat": point["lat"],
-                "miles_from_origin": point["miles_from_origin"],
+                "lon": point.get("lon"),
+                "lat": point.get("lat"),
+                "miles_from_origin": point.get("miles_from_origin"),
                 "hourly": hourly,
             }
         )
 
     return {
-        "origin": origin,
-        "destination": destination,
-        "departure_at": departure_at.isoformat(),
+        "origin": plan.get("origin"),
+        "destination": plan.get("destination"),
+        "departure_at": plan.get("departure_at"),
         "load_weight_lb": load_weight_lb,
-        "sample_interval_miles": interval,
+        "sample_interval_miles": plan.get("sample_interval_miles"),
         "routes": routes_out,
         "recommended_route_id": recommended_id,
         "recommendation_reason": reason,
